@@ -18,17 +18,16 @@ library(googlesheets4)
 # # see your token file in the cache, if you like
 # list.files(".secrets/")
 
-options(gargle_oauth_email = "pganalytics25@gmail.com", gargle_verbosity = "debug")
-gargle::token_fetch(scopes = "https://www.googleapis.com/auth/userinfo.email")
-
+# options(gargle_oauth_email = "cstepilk@gmail.com", gargle_verbosity = "debug")
+# options(gargle_oauth_email = "pganalytics25@gmail.com", gargle_verbosity = "debug")
 # options(gargle_oauth_email = "ilkaqapp@gmail.com", gargle_verbosity = "debug")
-#gargle::token_fetch(scopes = "https://www.googleapis.com/auth/userinfo.email")
+# gargle::token_fetch(scopes = "https://www.googleapis.com/auth/userinfo.email")
 
-# gs4_auth(cache = ".secrets", email = TRUE,
-#          scopes = c("https://www.googleapis.com/auth/spreadsheets"))
+gs4_auth(cache = ".secrets", email = TRUE,
+         scopes = c("https://www.googleapis.com/auth/spreadsheets"))
 
 # gs4_auth(cache = ".secrets", email = "ilkaqapp@gmail.com")
-#gs4_auth(cache = ".secrets", email = "cstepilk@gmail.com")
+# gs4_auth(cache = ".secrets", email = "cstepilk@gmail.com")
 
-gargle::token_fetch(scopes = "https://www.googleapis.com/auth/userinfo.email")
+# gargle::token_fetch(scopes = "https://www.googleapis.com/auth/userinfo.email")
 # gargle::credentials_user_oauth2()

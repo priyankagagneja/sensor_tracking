@@ -2,58 +2,17 @@
 ## Function to add a record - works for both dashboard/history and maintenance log -
 # It's a generic function that will automatically pull the column names
 # for the data frame passed as argument
-add_record_modal <- function(df) {
-
-  print(deparse(substitute(df)))
-  buttonId <- if(deparse(substitute(df)) == "history_df") "append_history" else "append_m_log"
-  print(buttonId)
-
-  showModal(modalDialog(
-    purrr::map(names(df),
-             ~shiny::textInput(inputId = paste0("add_",.x),
-                               label = .x)
-             ),
-  footer = tagList(
-    modalButton("Cancel"),
-    # actionButton("append", "Save")
-    actionButton(buttonId, "Save")
-  )
-  ))
-
-}
-
-edit_record_modal <- function(df, modal_df) { #
-
-  buttonId <- if(deparse(substitute(df)) == "history_df") "update_history" else "update_m_log"
-  print(buttonId)
-
-  print("x")
-  showModal(modalDialog(
-    purrr::map(names(df),
-               ~shiny::textInput(inputId = paste0("mod_",.x),
-                                 label = .x,
-                                 value = modal_df[,.x])
-    ),
-    footer = tagList(
-      modalButton("Cancel"),
-      # actionButton("append", "Save")
-      actionButton(buttonId, "Save")
-    )
-  ))
-
-  print("y")
-
-}
-
-record_data_modal <- function(action, data_from, modal_df) { #
+record_data_modal <- function(action, data_from, modal_df) {
 
   buttonId <- paste(action, data_from, sep="_")
   print(buttonId)
 
-  df <- get(glue::glue("{data_from}_df"))
+  df <- get(glue::glue("{data_from}_df"))  # column names from raw are not working... TO DO ... :|
+
+  # cols_vec <- names(df)[!names(df) %in% c("row_index")]   # don't show row_index in the pop_up
 
   showModal(modalDialog(
-    purrr::map(names(df),
+    purrr::map(names(df), # cols_vec,
                ~shiny::textInput(inputId = paste0(action,"_",.x),
                                  label = .x,
                                  value = if(is.null(modal_df)) "" else modal_df[,.x])
@@ -69,30 +28,50 @@ record_data_modal <- function(action, data_from, modal_df) { #
 
 save_record_to_df <- function(df, action, session){
 
+  print(session$input[[paste0(action, "_", "id")]])
+  # print(session$input)
+
   # action - can be 'add' or 'mod'
   result <- tibble(input_name = paste0(action, "_", names(df))) %>%
-    mutate(input_value = map_chr(input_name, ~session$input[[.x]])) %>%
-    column_to_rownames(var = 'input_name') %>%
-    t() %>%
-    data.frame() %>%
-    tidyr::unnest(cols = c()) %>%
-    identity()
+      mutate(input_value = map_chr(input_name, ~session$input[[.x]], .default = NA) ) %>%
+    # returning error -> x Result 1 must be a single string, not NULL of length 0
+      # mutate(input_value = map(input_name, ~session$input[[.x]]) ) %>%
+      data.frame() %>%
+      column_to_rownames(var = 'input_name') %>%
+      #tidyr::unnest(cols = c()) %>%
+      t() %>%
+      data.frame()
 
   # result %>% View()
+  print(class(result))
   names(result) <- names(df)
 
+  result <- result %>%
+    mutate(row_index = if_else(action == "append", nrow(df)+1, as.double(row_index)),  .before = 1)
+
+  #print(str(result))
   print(result)
+
   return(result)
 }
 
-save_df_to_gsheet <- function(destination_file, source_df){
+save_df_to_gsheet <- function(action, destination_file, source_df){
 
   print("before")
-  sheet_append(destination_file, source_df, sheet = 1)
-                 # switch(destination_file,
-  #                                                  history_file_name = "History_Long",
-  #                                                  maintenance_log_file_name = "Sheet 1"
-  # )
+  print(head(source_df))
+
+  switch(destination_file,
+         history_file_name = "History_Long",
+         maintenance_log_file_name = "Sheet 1"
+  )
+
+  if(action == "append"){
+    sheet_append(destination_file, source_df, sheet = 1)
+  } else {
+    print("row_index = ")
+    print(source_df$row_index)
+    range_write(destination_file, source_df, range = paste0("A",source_df$row_index+1))
+  }
 
   print("after")
 
@@ -115,26 +94,16 @@ filter_data <- function(df,...){
     filter(...)
 }
 
-filter_data2 <- function(df,var_name, var_value = ""){
+format_date_columns_as_date <- function(df){
+  df %>%
+    # Those in datetime format will be converted to Date() format
+    mutate(across(where(lubridate::is.POSIXt), as.Date))
 
-  if(!length(var_value) == 0){
-    df <-  df %>%
-      filter({{var_name}} == var_value)
+    # mutate({{var}} := as.Date(strptime({{var}}, format = " %Y-%m-%d %H:%M")))
+
+    # TODO: those that are datetime() but appearing as a list ( combination of datetime and chr)
+    # mutate(across(contains("date"), ~ as.Date(.x))) %>%
   }
-
-  print(deparse(substitute(var_name)))
-  print(var_value)
-  print(length(var_value))
-
-  return(df)
-}
-
-
-# clean_dates <- function(df) {
-#   df %>%
-#     mutate(across(contains("date"), ~ as.Date(as.character(.x), format = "%m-%d-%Y")))
-# }
-
 
 get_choices <- function(df, var) {
   # df_name <- deparse(substitute(df))
@@ -147,28 +116,4 @@ get_choices <- function(df, var) {
          )
 
 
-}
-
-# NOT WORKING
-get_selections <- function(df, var) {
-  data <- df %>% clean_names()
-
-  if(input$sensor_current_location %in% 'No Selection'){
-    location_str = NULL
-  }
-
-  if(input$sensor_id %in% 'No Selection'){
-    location_id = NULL
-  }
-
-  final_selection <- case_when(
-    is.null(location_str) & is.null(location_str)  ~ "",
-    is.null(location_str) & is.null(location_str)  ~ "",
-  )
-
-  # return(switch(var,
-  #               id = c('No Selection',unique(data$id)),
-  #               current_location = c('No Selection',unique(data$current_location)),
-  #               NULL)
-  # )
 }

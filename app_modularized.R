@@ -11,19 +11,23 @@ library(leaflet)
 library(timevis)
 library(dplyr)
 library(tidyr)
+library(lubridate)
+library(shinythemes)
 
-
-source("R/utils.R")
+# print(here::here())
 # source("R/authenticate_user.R")
+source("R/utils.R")
 source("R/load_data.R")
 
 maintenance_log_columns <- c("id", "sensor_location", "issue", "resolution", "cause")
-history_columns <- c("id", "sensor_current_status", "host_name", "current_location", "sensor_mac_id", "site_start_date", "site_end_date")
+history_columns <- c("id", "sensor_current_status", "host_name", "current_location",
+                      "site_start_date", "site_end_date")
 
 # Define UI for application that draws a histogram
-ui <- fluidPage(
+ui <- fluidPage(theme = shinytheme("cerulean"),
 
     # Application title
+    img(src="ILK_Logo.jpg", height="15%", width="15%", align="right"),
     titlePanel("Low Cost Sensor Management Portal"),
 
     sidebarLayout(
@@ -45,6 +49,7 @@ ui <- fluidPage(
 
             h4("Current status of the selected Sensor"),
             verbatimTextOutput("selectionText"),
+            hr(),
 
             tabsetPanel(id = "mainPanel",
                 # tabPanel(title = "Dashboard",
@@ -52,14 +57,17 @@ ui <- fluidPage(
 
                 tabPanel(title = "History",
                          hr(),
-                         tableOutput("tbl"),
-                         hr(),
+                         # tableOutput("tbl"),
+                         # hr(),
                          actionButton("add_history", "Add History"),
+                         hr(),
                          DT::dataTableOutput("history"),
                          timevisOutput("history_timeline")),
 
                 tabPanel(title = "Maintenance Log",
+                         hr(),
                          actionButton("add_m_log", "Add Maintenance Log"),
+                         hr(),
                          DT::dataTableOutput("maintenance_log"))
             )
         )
@@ -78,13 +86,6 @@ server <- function(input, output, session) {
     })
 
     # Clear Selections
-    # observeEvent(input$clear_id, {
-    #     updateSelectInput(session, "sensor_id",  choices = c('No Selection',unique(dashboard_df$id)), selected = 'No Selection')
-    #     })
-    # observeEvent(input$clear_location, {
-    #     updateSelectInput(session, "sensor_current_location",  choices = c('No Selection',unique(dashboard_df$current_location)), selected = 'No Selection')
-    #     })
-
     observeEvent(input$clear_id, {
         clear_input(session, "sensor_id", get_choices(history_df, "id"))
         #updateSelectInput(session, "sensor_id",  choices = c('No Selection',unique(history_df$id)), selected = 'No Selection')
@@ -96,7 +97,6 @@ server <- function(input, output, session) {
 
 
     text <- reactive({
-
         # if(input$sensor_current_location == '' & input$sensor_id == ''){
         if(input$sensor_current_location %in% 'No Selection' & input$sensor_id %in% 'No Selection'){
             txt <- "No filters selected"
@@ -221,13 +221,14 @@ server <- function(input, output, session) {
 
     observeEvent(input$append_history, {
 
-        showModal(modalDialog("Saving new record as data frame.."))
-        rctv <- save_record_to_df(history_df, action = "add" , session)
+        showModal(modalDialog("Saving new record as data frame..", footer = NULL, fade = TRUE))
+        rctv <- save_record_to_df(history_df, action = "append" , session) %>%
+            select(-current_location)
         Sys.sleep(3)
         removeModal()
 
-        showModal(modalDialog("Saving df into the googlesheet.."))
-        save_df_to_gsheet(history_file_name, rctv)
+        showModal(modalDialog("Saving df into the googlesheet..", footer = NULL, fade = TRUE))
+        save_df_to_gsheet(action = "append", history_file_name, rctv)
         removeModal()
 
     })
@@ -239,15 +240,15 @@ server <- function(input, output, session) {
         append_maintenance_log_record <- record_data_modal(action = "append", data_from = "maintenance_log", modal_df = NULL)
     })
 
-    observeEvent(input$append_m_log, {
+    observeEvent(input$append_maintenance_log, {
 
-        showModal(modalDialog("Saving new record as data frame.."))
-        rctv <- save_record_to_df(maintenance_log_df, action = "add" , session)
+        showModal(modalDialog("Saving new record as data frame..", footer = NULL, fade = TRUE))
+        rctv <- save_record_to_df(maintenance_log_df, action = "append" , session)
         Sys.sleep(3)
         removeModal()
 
-        showModal(modalDialog("Saving df into the googlesheet.."))
-        save_df_to_gsheet(maintenance_log_file_name, rctv)
+        showModal(modalDialog("Writing the df into the googlesheet..", footer = NULL, fade = TRUE))
+        save_df_to_gsheet(action = "append", maintenance_log_file_name, rctv)
         removeModal()
 
     })
@@ -268,18 +269,18 @@ server <- function(input, output, session) {
         update_maintenance_log_record <- record_data_modal(action = "update", data_from = "maintenance_log", modal_df)
     })
 
-    observeEvent(input$update_m_log, {
+    observeEvent(input$update_maintenance_log, {
         # modify the googlesheet
         print("maintenance log record clicked for updating")
 
         showModal(modalDialog("Saving modified record as data frame..", easyClose = TRUE, footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(maintenance_log_df, action = "mod" , session)
+        rctv <- save_record_to_df(maintenance_log_df, action = "update" , session)
         Sys.sleep(3)
         removeModal()
 
-        # showModal(modalDialog("Saving df into the googlesheet.."))
-        # save_df_to_gsheet(history_file_name, rctv)
-        # removeModal()
+        showModal(modalDialog("Saving df into the googlesheet..", footer = NULL, fade = TRUE))
+        save_df_to_gsheet(action = "update", history_file_name, rctv)
+        removeModal()
     })
 
     observeEvent(input$history_rows_selected, {
@@ -301,14 +302,14 @@ server <- function(input, output, session) {
         print("history record clicked for updating")
 
         showModal(modalDialog("Saving modified record as data frame..", easyClose = TRUE, footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(history_df, action = "mod" , session)
+        rctv <- save_record_to_df(history_df, action = "update" , session) %>%
+            select(-current_location)
         Sys.sleep(3)
         removeModal()
 
-
-        # showModal(modalDialog("Saving df into the googlesheet.."))
-        # save_df_to_gsheet(history_file_name, rctv)
-        # removeModal()
+        showModal(modalDialog("Saving df into the googlesheet..", footer = NULL, fade = TRUE))
+        save_df_to_gsheet(action = "update", history_file_name, rctv)
+        removeModal()
     })
 
     # setting default values for the reactive elements
