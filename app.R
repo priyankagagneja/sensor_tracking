@@ -26,10 +26,11 @@ maintenance_log_columns_to_display <- c("ID ", "Location", "Issue", "Resolution"
 history_columns_to_display <- c("ID", "Current Status", "Host Name", "Location", "Start Date", "End Date")
 
 # Define UI for application that draws a histogram
-ui <- fluidPage(theme = shinytheme("flatly"),
+ui <- fluidPage(theme = shinytheme("cerulean"),
 
     # Application title
     img(src="ILK_Logo.jpg", height="5%", width="5%", align="right", alt = "ILK Logo"),
+
     titlePanel("Low Cost Sensor Management Portal"),
 
     sidebarLayout(
@@ -54,13 +55,9 @@ ui <- fluidPage(theme = shinytheme("flatly"),
             hr(),
 
             tabsetPanel(id = "mainPanel",
-                # tabPanel(title = "Dashboard",
-                #          DT::dataTableOutput("dashboard")),
 
                 tabPanel(title = "History",
                          hr(),
-                         # tableOutput("tbl"),
-                         # hr(),
                          actionButton("add_history", "Add History"),
                          hr(),
                          DT::dataTableOutput("history"),
@@ -324,6 +321,7 @@ server <- function(input, output, session) {
                     select(all_of(history_columns))
             }
         }, selection = 'single'
+        , rownames= FALSE
         , options = list(
             paging =TRUE,
             pageLength =  5
@@ -345,12 +343,12 @@ server <- function(input, output, session) {
                 select(all_of(maintenance_log_columns))
         }
     }  , selection = 'single'
+    , rownames= FALSE
     , options = list(
         paging =TRUE,
         pageLength =  5
     )
     )
-
 }
 
 # Run the application
