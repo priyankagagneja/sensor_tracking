@@ -26,33 +26,28 @@ maintenance_log_columns_to_display <- c("ID ", "Location", "Issue", "Resolution"
 history_columns_to_display <- c("ID", "Current Status", "Host Name", "Location", "Start Date", "End Date")
 
 # Define UI for application that draws a histogram
-ui <- fluidPage(theme = shinytheme("cerulean"),
+ui <- fluidPage(theme = shinytheme("flatly"),
 
     # Application title
     img(src="ILK_Logo.jpg", height="5%", width="5%", align="right", alt = "ILK Logo"),
 
     titlePanel("Low Cost Sensor Management Portal"),
 
-    sidebarLayout(
+    fluidRow(h4("Select the Sensor"),
+        column(4, selectInput("sensor_current_location", "By Current Location", choices = NULL)),
+        column(2, actionButton("clear_location", 'Clear')),
+        column(4, selectInput("sensor_id", "By ID", choices = NULL)),
+        column(2, actionButton("clear_id", 'Clear'))
+    ),
 
-        # Sidebar with a slider input
-        sidebarPanel(
-            h4("Select the Sensor"),
+    fluidRow(
+        h4("Selected Sensor"),
+        verbatimTextOutput("selectionText"),
+        h4("Current status of the selected Sensor"),
+        hr(),
 
-            selectInput("sensor_current_location", "By Current Location", choices = NULL),
-            actionButton("clear_location", 'Clear'),
-
-            selectInput("sensor_id", "By ID", choices = NULL),
-            actionButton("clear_id", 'Clear')
-
-        ),
-        mainPanel(
-
-            leafletOutput("map",height="30vh",width="80vh"),
-
-            h4("Current status of the selected Sensor"),
-            verbatimTextOutput("selectionText"),
-            hr(),
+        column(4, leafletOutput("map")), # ,height="30vh",width="80vh")
+        column(8,
 
             tabsetPanel(id = "mainPanel",
 
@@ -317,8 +312,11 @@ server <- function(input, output, session) {
 
     output$history <- DT::renderDataTable({
         if(! is.null(selected_history_data())){
-            selected_history_data() %>%
+            df <- selected_history_data() %>%
                     select(all_of(history_columns))
+            names(df) <- history_columns_to_display
+            df
+
             }
         }, selection = 'single'
         , rownames= FALSE
@@ -339,8 +337,11 @@ server <- function(input, output, session) {
 
     output$maintenance_log <- DT::renderDataTable({
         if(! is.null(selected_maintenance_log_data())){
-            selected_maintenance_log_data() %>%
+            df <- selected_maintenance_log_data() %>%
                 select(all_of(maintenance_log_columns))
+
+            names(df) <- maintenance_log_columns_to_display
+            df
         }
     }  , selection = 'single'
     , rownames= FALSE
