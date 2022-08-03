@@ -59,18 +59,24 @@ save_df_to_gsheet <- function(action, destination_file, source_df){
 
   print("before")
   print(head(source_df))
+  print(class(source_df))
+  print(str(source_df))
 
-  switch(destination_file,
-         history_file_name = "History_Long",
-         maintenance_log_file_name = "Sheet 1"
-  )
+  print(paste0("A",source_df$row_index+1))
+
+  # switch(destination_file,
+  #        history_file_name = "History_Long",
+  #        maintenance_log_file_name = "Sheet 1"
+  # )
 
   if(action == "append"){
     sheet_append(destination_file, source_df, sheet = 1)
   } else {
     print("row_index = ")
     print(source_df$row_index)
-    range_write(destination_file, source_df, range = paste0("A",source_df$row_index+1))
+    range_write(destination_file, source_df,
+                range = paste0("A",source_df$row_index+1),
+                col_names = FALSE, reformat = FALSE)
   }
 
   print("after")

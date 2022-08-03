@@ -23,10 +23,10 @@ library(googlesheets4)
 # options(gargle_oauth_email = "ilkaqapp@gmail.com", gargle_verbosity = "debug")
 # gargle::token_fetch(scopes = "https://www.googleapis.com/auth/userinfo.email")
 
-gs4_auth(cache = ".secrets", email = TRUE,
-         scopes = c("https://www.googleapis.com/auth/spreadsheets"))
+# gs4_auth(cache = ".secrets", email = TRUE,
+#          scopes = c("https://www.googleapis.com/auth/spreadsheets"))
 
-# gs4_auth(cache = ".secrets", email = "ilkaqapp@gmail.com")
+gs4_auth(cache = ".secrets", email = "ilkaqapp@gmail.com")
 # gs4_auth(cache = ".secrets", email = "cstepilk@gmail.com")
 
 # gargle::token_fetch(scopes = "https://www.googleapis.com/auth/userinfo.email")

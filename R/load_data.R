@@ -1,6 +1,7 @@
 library(googlesheets4)
 library(janitor)
 library(dplyr)
+
 source("R/utils.R")
 
 # load("sensor_tracking_data.RData")
@@ -14,11 +15,12 @@ maintenance_log_raw <- read_sheet(maintenance_log_file_name, sheet = 1, col_type
 maintenance_log_df <- maintenance_log_raw %>%
   clean_names()  %>%
   format_date_columns_as_date() %>%
+  mutate(row_index = as.double(row_index %>% unlist())) %>%
   # clean_dates() %>%
   # mutate(row_index = row_number(), .before = "date") %>%
   identity()
 
-history_raw <- read_sheet(history_file_name, sheet = "History_long")
+history_raw <- read_sheet(history_file_name, sheet = "History_long", col_types = "c")
 history_df <- history_raw %>%
   clean_names() %>%
   format_date_columns_as_date() %>%
