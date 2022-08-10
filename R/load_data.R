@@ -25,9 +25,16 @@ history_df <- history_raw %>%
   clean_names() %>%
   format_date_columns_as_date() %>%
   #clean_dates() %>%
-  mutate(current_location = if_else(is.na(host_name), site_code, host_name)) %>%
+  # mutate(current_location = if_else(is.na(host_name), site_code, host_name)) %>%
   filter(!is.na(id)) # %>%
   # select(-row_index)
+
+history_columns_type <- read_sheet(history_file_name, sheet = "column_datatype")
+
+numeric_type_df <- history_columns_type %>%
+  filter(column_type %in% c('integer','numeric'))
+
+history_columns_values <- read_sheet(history_file_name, sheet = "column_values_long")
 
 ###### uncomment upto here
 

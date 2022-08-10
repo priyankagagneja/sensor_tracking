@@ -4,7 +4,6 @@ library(googlesheets4)
 # Google login (for the maintainer, most likely 1 time login setup)
 
 # One time for  a project
-# library(googlesheets4)
 
 # # designate project-specific cache
 # options(gargle_oauth_cache = ".secrets")

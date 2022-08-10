@@ -2,7 +2,7 @@
 ## Function to add a record - works for both dashboard/history and maintenance log -
 # It's a generic function that will automatically pull the column names
 # for the data frame passed as argument
-record_data_modal <- function(action, data_from, modal_df) {
+record_data_modal_base <- function(action, data_from, modal_df) {
 
   buttonId <- paste(action, data_from, sep="_")
   print(buttonId)
@@ -25,6 +25,76 @@ record_data_modal <- function(action, data_from, modal_df) {
 
 }
 
+record_data_modal <- function(action, data_from, modal_df) {
+
+  buttonId <- paste(action, data_from, sep="_")
+  print(buttonId)
+
+  df <- get(glue::glue("{data_from}_df"))  # column names from raw are not working... TO DO ... :|
+
+  # cols_vec <- names(df)[!names(df) %in% c("row_index")]   # don't show row_index in the pop_up
+
+  if(data_from == "history" & action == "append")
+  {
+    choices_as_list <- history_columns_values %>% group_by(column_name) %>% nest()
+
+    # print(history_columns_values$column_name)
+    # print(choices_as_list$data[1])
+    # print(choices_as_list$data[choices_as_list$column_name == "sensor_owner"])
+    # print(choices_as_list[[2]][[1]])
+    print(choices_as_list[[1]])
+
+    showModal(modalDialog(
+      purrr::map2(.x = choices_as_list[[1]], #choices_as_list$column_name, # col_names, # cols_vec,
+                  .y = choices_as_list[[2]], # choices_as_list$data,
+                  .f = #print(paste(.x, .y %>% unnest()))
+                    # function(a, b) print(paste(a, b %>% unnest()))
+                    function(a, b)
+                      if(is.na(b$column_values) & length(b) == 1){
+
+                        if(grepl("date",a)){
+                          shiny::dateInput(inputId = paste0(action,"_",a),
+                                  label = a#,
+                                  #value = lubridate::today()
+                                  )
+                        } else {
+                          shiny::textInput(inputId = paste0(action,"_",a),
+                                      label = a,
+                                      value = if(is.null(modal_df)) "" else modal_df[,a])
+                        }
+                      } else{
+                      shiny::selectInput(inputId = paste0(action,"_",a),
+                                   label = a,
+                                   choices = b)
+                      }
+      ),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton(buttonId, "Save")
+      )
+    ))
+
+  } else {
+  showModal(modalDialog(
+    purrr::map(names(df), # cols_vec,
+               ~ if(grepl("date",.x)){
+                 shiny::dateInput(inputId = paste0(action,"_",.x),
+                                  label = .x
+                 )
+               } else {
+                 shiny::textInput(inputId = paste0(action,"_",.x),
+                                 label = .x,
+                                 value = if(is.null(modal_df)) "" else modal_df[,.x])
+               }
+    ),
+    footer = tagList(
+      modalButton("Cancel"),
+      actionButton(buttonId, "Save")
+    )
+  ))
+  }
+
+}
 
 save_record_to_df <- function(df, action, session){
 
@@ -33,9 +103,10 @@ save_record_to_df <- function(df, action, session){
 
   # action - can be 'add' or 'mod'
   result <- tibble(input_name = paste0(action, "_", names(df))) %>%
-      mutate(input_value = map_chr(input_name, ~session$input[[.x]], .default = NA) ) %>%
+      mutate(input_value = map(input_name, ~session$input[[.x]], .default = NA) ) %>% #%>% as.list()) %>%
     # returning error -> x Result 1 must be a single string, not NULL of length 0
       # mutate(input_value = map(input_name, ~session$input[[.x]]) ) %>%
+      # mutate(input_value = map_chr(input_name, ~session$input[[.x]], .default = NA) ) %>%
       data.frame() %>%
       column_to_rownames(var = 'input_name') %>%
       #tidyr::unnest(cols = c()) %>%
@@ -47,7 +118,7 @@ save_record_to_df <- function(df, action, session){
   names(result) <- names(df)
 
   result <- result %>%
-    mutate(row_index = if_else(action == "append", nrow(df)+1, as.double(row_index)),  .before = 1)
+    mutate(row_index = if_else(action == "append", nrow(df)+1, as.double(row_index)), .before = 1)
 
   #print(str(result))
   print(result)
@@ -92,7 +163,8 @@ clear_input <- function(session, id, choices) {
 # Returns a logical vector (containing true false) depending on if the condition is satisfied or not.
 create_filter_vec <- function(df, var, value) {
   vec <- df %>% select({{var}})
-  if(value != 'No Selection') (vec == value) else TRUE
+
+  return(if(value != 'No Selection') (vec == value) else TRUE)
 }
 
 filter_data <- function(df,...){
@@ -117,7 +189,7 @@ get_choices <- function(df, var) {
 
   return(switch(var,
          id = c('No Selection',unique(data$id)),
-         current_location = c('No Selection',unique(data$current_location)),
+         sensor_location = c('No Selection',unique(data$sensor_location)),
          NULL)
          )
 
