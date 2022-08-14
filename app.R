@@ -13,9 +13,6 @@ library(tidyr)
 library(lubridate)
 library(shinythemes)
 
-# print(here::here())
-# source("R/authenticate_user.R")
-source("R/load_data.R")
 
 maintenance_log_columns <- c("id", "sensor_location", "issue", "resolution", "cause")
 history_columns <- c("id", "sensor_current_status", "sensor_location", # "current_location",
@@ -232,7 +229,7 @@ server <- function(input, output, session) {
     observeEvent(input$append_history, {
 
         showModal(modalDialog("Saving new record as data frame..", footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(history_df, action = "append" , session)
+        rctv <- save_record_to_df(history_df, action = "append" , session, nrow(history_df)+1)
         Sys.sleep(3)
 
         # Adding some data validation for numeric inputs
@@ -260,7 +257,7 @@ server <- function(input, output, session) {
     observeEvent(input$append_maintenance_log, {
 
         showModal(modalDialog("Saving new record as data frame..", footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(maintenance_log_df, action = "append" , session)
+        rctv <- save_record_to_df(maintenance_log_df, action = "append" , session, nrow(maintenance_log_df)+1)
         Sys.sleep(3)
         removeModal()
 
@@ -291,7 +288,7 @@ server <- function(input, output, session) {
         print("maintenance log record clicked for updating")
 
         showModal(modalDialog("Saving modified record as data frame..", easyClose = TRUE, footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(maintenance_log_df, action = "update" , session)
+        rctv <- save_record_to_df(maintenance_log_df, action = "update" , session, modal_df$row_index)
         Sys.sleep(3)
         removeModal()
 
@@ -319,7 +316,7 @@ server <- function(input, output, session) {
         print("history record clicked for updating")
 
         showModal(modalDialog("Saving modified record as data frame..", easyClose = TRUE, footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(history_df, action = "update" , session)
+        rctv <- save_record_to_df(history_df, action = "update" , session, modal_df$row_index)
         Sys.sleep(3)
         removeModal()
 
