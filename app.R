@@ -13,7 +13,6 @@ library(tidyr)
 library(lubridate)
 library(shinythemes)
 
-
 maintenance_log_columns <- c("id", "sensor_location", "issue", "resolution", "cause")
 history_columns <- c("id", "sensor_current_status", "sensor_location", # "current_location",
                       "site_start_date", "site_end_date")
@@ -48,10 +47,15 @@ ui <- fluidPage(theme = shinytheme("flatly"),
         hr(),
 
         column(4,
-               tabsetPanel(id = "mapPanel",
-                           tabPanel(title = "Map",
-                                    leafletOutput("map") # ,height="30vh",width="80vh")
-               ))),
+               tabsetPanel(id = "loadPanel",
+                           tabPanel(title = "Load Files",
+                                    textInput(inputId = "history_file_url", label = "Enter dashboard/history file url"),
+                                    textInput(inputId = "maintenance_log_file_url", label = "Enter maintenance log file url"),
+                                    actionButton("load_data", "Load Files")
+                           ),
+                           tabPanel(title = "View Map",
+                                             leafletOutput("map") )# ,height="30vh",width="80vh")
+               )),
         column(8,
             tabsetPanel(id = "mainPanel",
 
@@ -78,26 +82,96 @@ ui <- fluidPage(theme = shinytheme("flatly"),
 # Define server logic
 server <- function(input, output, session) {
 
-    print(head(history_df))
+  # Load Data as the input files are available
+
+  maintenance_log_file_name <- eventReactive(input$load_data, {
+      input$maintenance_log_file_url
+    })
+
+  history_file_name <- eventReactive(input$load_data, {
+      input$history_file_url
+  })
+
+  observeEvent(input$load_data,{
+    # if(is.null(input$maintenance_log_file_url) | is.null(input$history_file_url)){
+    #   validate("Please enter both the source files")
+
+      validate(
+        need(input$maintenance_log_file_url, 'Please enter location of maintenance log googlesheet'),
+        need(input$history_file_url , 'Please enter location of dashaboard googlesheet')
+        # need((input$maintenance_log_file_url , input$history_file_url),
+        #             "Please enter both the source files")
+               )
+  })
+
+  maintenance_log_df <- eventReactive(input$load_data, {
+    # reactive({
+    # req(maintenance_log_raw())
+    req(maintenance_log_file_name())
+
+    df <- load_df(maintenance_log_file_name(), sheet = 1) %>%
+      prep_data()
+
+    # print(head(df))
+    return(df)
+  })
+
+  history_df <- eventReactive(input$load_data, {
+    # reactive({
+    #req(history_raw())
+    req(history_file_name())
+
+    df <- load_df(history_file_name(), sheet = "History_long") %>%
+      prep_data()
+
+    # print(head(df))
+    return(df)
+
+  })
+
+  # These also depend on the reactive element (filename) so, need to be treated like above.
+  # challenge though is how to get them to work imside the function - get_modal_
+  history_columns_type <- eventReactive(input$load_data, {
+    req(history_file_name())
+    load_df(file = history_file_name(), sheet = "column_datatype")
+
+  })
+
+  numeric_type_df <- reactive({
+    history_columns_type() %>%
+    filter(column_type %in% c('integer','numeric'))
+  })
+
+  history_columns_values <- eventReactive(input$load_data, {
+    req(history_file_name())
+    load_df(file = history_file_name(), sheet = "column_values_long")
+  })
+
 
     # Update Dropdowns
-    observe({
-        updateSelectInput(session, "sensor_id",  choices = get_choices(history_df, "id"))
-        updateSelectInput(session, "sensor_current_location",  choices = get_choices(history_df, "sensor_location"))
+    observeEvent(input$load_data, {
+      req(history_df())
+        updateSelectInput(session, inputId = "sensor_id",
+                          choices = get_choices(df = history_df(), var = "id"))
+        updateSelectInput(session, inputId = "sensor_current_location",
+                          choices = get_choices(df = history_df(), var = "sensor_location"))
     })
 
     # Clear Selections
     observeEvent(input$clear_id, {
-        clear_input(session, "sensor_id", get_choices(history_df, "id"))
+      # req(history_df())
+        clear_input(session, "sensor_id", get_choices(history_df(), "id"))
         #updateSelectInput(session, "sensor_id",  choices = c('No Selection',unique(history_df$id)), selected = 'No Selection')
     })
     observeEvent(input$clear_location, {
-        clear_input(session, "sensor_current_location", get_choices(history_df, "sensor_location"))
+      # req(history_df())
+        clear_input(session, "sensor_current_location", get_choices(history_df(), "sensor_location"))
         #updateSelectInput(session, "sensor_current_location",  choices = c('No Selection',unique(history_df$current_location)), selected = 'No Selection')
     })
 
-
     text <- reactive({
+        req(history_df())
+
         # if(input$sensor_current_location == '' & input$sensor_id == ''){
         if(input$sensor_current_location %in% 'No Selection' & input$sensor_id %in% 'No Selection'){
             txt <- "No filters selected"
@@ -121,24 +195,30 @@ server <- function(input, output, session) {
       # vec_location <- if(input$sensor_current_location != 'No Selection') paste("history_df$site_code ==", location_code) else TRUE
       # vec_date_ge <- create_filter_vec()
 
-        vec_id <- create_filter_vec(history_df, id, input$sensor_id)
-        vec_location <- create_filter_vec(history_df, sensor_location, input$sensor_current_location) #location_code)
+      req(input$history_file_url)
+
+      if(!is.null(history_df())){
+        vec_id <- create_filter_vec(history_df(), id, input$sensor_id)
+        vec_location <- create_filter_vec(history_df(), sensor_location, input$sensor_current_location) #location_code)
 
         # print(vec_id)
         # print(vec_location)
 
-        df <- history_df %>%
+        df <- history_df() %>%
             filter_data(vec_id, vec_location) %>%
             identity()
 
         print("selected_history_data =")
         print(df)
-
+      } else{
+      df <- NULL
+    }
         return(df)
     })
 
     history_timeline_data <- reactive({
-        req(selected_history_data())
+        # req(selected_history_data())
+        req(history_df())
         if(! is.null(selected_history_data())){
 
             data <- selected_history_data() %>%
@@ -179,18 +259,23 @@ server <- function(input, output, session) {
         return(df)
     })
 
-    leaflet_map <- leaflet() %>%
+    leaflet_map <- reactive({
+      req(history_df())
+
+      leaflet() %>%
         addTiles() %>%  # Add default OpenStreetMap map tiles
-        addCircleMarkers(data = history_df, lng = ~ as.numeric(longitude), lat = ~ as.numeric(latitude),
+        addCircleMarkers(data = history_df(), lng = ~ as.numeric(longitude), lat = ~ as.numeric(latitude),
                          popup= ~ paste(id, sensor_location))
+    })
 
     map <- reactive({
+        req(selected_history_data())
 
         if(input$sensor_current_location %in% 'No Selection' & input$sensor_id %in% 'No Selection'){
-            leaflet_map <- leaflet_map
+            leaflet_map <- leaflet_map()
         } else {
             req(selected_history_data())
-            leaflet_map <- leaflet_map %>%
+            leaflet_map <- leaflet_map() %>%
                 addCircleMarkers(data = selected_history_data(), lng = ~ as.numeric(longitude), lat = ~ as.numeric(latitude),
                                  color = "red", popup = ~ paste(id, sensor_location))
         }
@@ -201,13 +286,16 @@ server <- function(input, output, session) {
 
     selected_maintenance_log_data <- reactive({
 
-        vec_id <- create_filter_vec(maintenance_log_df, id, input$sensor_id)
-        vec_location <- create_filter_vec(maintenance_log_df, sensor_location, input$sensor_current_location)
+      req(maintenance_log_df())
+      # if(! is.null(maintenance_log_df())){
+
+        vec_id <- create_filter_vec(maintenance_log_df(), id, input$sensor_id)
+        vec_location <- create_filter_vec(maintenance_log_df(), sensor_location, input$sensor_current_location)
 
         # print(vec_id)
         # print(vec_location)
 
-        df <- maintenance_log_df %>%
+        df <- maintenance_log_df() %>%
             filter_data(vec_id, vec_location) %>%
             identity()
 
@@ -223,17 +311,18 @@ server <- function(input, output, session) {
     ### ADD BUTTONS
     observeEvent(input$add_history, {
         #append_history_record <- add_record_modal(history_df)
-        append_history_record <- record_data_modal(action = "append", data_from = "history", modal_df = NULL)
+        append_history_record <- record_data_modal(df = history_df(), action = "append",  modal_df = NULL,
+                                                   columns_values = history_columns_values()) # data_from = "history",
     })
 
     observeEvent(input$append_history, {
 
         showModal(modalDialog("Saving new record as data frame..", footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(history_df, action = "append" , session, nrow(history_df)+1)
+        rctv <- save_record_to_df(history_df(), action = "append" , session, nrow(history_df()+1))
         Sys.sleep(3)
 
         # Adding some data validation for numeric inputs
-        error_type_df <- numeric_type_df %>%
+        error_type_df <- numeric_type_df() %>%
           mutate(isValid = is.na(as.numeric(rctv[[column_name]]))) %>%
           filter(is.na(isValid))
 
@@ -242,7 +331,7 @@ server <- function(input, output, session) {
         removeModal()
 
         showModal(modalDialog("Saving df into the googlesheet..", footer = NULL, fade = TRUE))
-        save_df_to_gsheet(action = "append", history_file_name, rctv)
+        save_df_to_gsheet(action = "append", input$history_file_url, rctv)
         removeModal()
 
     })
@@ -251,18 +340,20 @@ server <- function(input, output, session) {
     # TODO: modify the Input type for different variables/fields
     observeEvent(input$add_m_log, {
         # append_maintenance_log_record <- add_record_modal(maintenance_log_df)
-        append_maintenance_log_record <- record_data_modal(action = "append", data_from = "maintenance_log", modal_df = NULL)
+
+        append_maintenance_log_record <- record_data_modal(df = maintenance_log_df(), action = "append",  modal_df = NULL,
+                                                           columns_values = NULL) # data_from = "maintenance_log",
     })
 
     observeEvent(input$append_maintenance_log, {
 
         showModal(modalDialog("Saving new record as data frame..", footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(maintenance_log_df, action = "append" , session, nrow(maintenance_log_df)+1)
+        rctv <- save_record_to_df(maintenance_log_df(), action = "append" , session, nrow(maintenance_log_df())+1)
         Sys.sleep(3)
         removeModal()
 
         showModal(modalDialog("Writing the df into the googlesheet..", footer = NULL, fade = TRUE))
-        save_df_to_gsheet(action = "append", maintenance_log_file_name, rctv)
+        save_df_to_gsheet(action = "append", input$maintenance_log_file_url, rctv)
         removeModal()
 
     })
@@ -280,7 +371,8 @@ server <- function(input, output, session) {
         print(modal_df)
 
         # update_maintenance_log_record <- edit_record_modal(maintenance_log_df)  # , modal_df
-        update_maintenance_log_record <- record_data_modal(action = "update", data_from = "maintenance_log", modal_df)
+        update_maintenance_log_record <- record_data_modal(df = maintenance_log_df(), action = "update", modal_df, # , data_from = "maintenance_log"
+                                                           columns_values = NULL)
     })
 
     observeEvent(input$update_maintenance_log, {
@@ -288,12 +380,13 @@ server <- function(input, output, session) {
         print("maintenance log record clicked for updating")
 
         showModal(modalDialog("Saving modified record as data frame..", easyClose = TRUE, footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(maintenance_log_df, action = "update" , session, modal_df$row_index)
+        rctv <- save_record_to_df(maintenance_log_df(), action = "update" , session, modal_df$row_index)
         Sys.sleep(3)
         removeModal()
 
         showModal(modalDialog("Saving df into the googlesheet..", footer = NULL, fade = TRUE))
-        save_df_to_gsheet(action = "update", maintenance_log_file_name, rctv)
+        # save_df_to_gsheet(action = "update", maintenance_log_file_name, rctv)
+        save_df_to_gsheet(action = "update", input$maintenance_log_file_url, rctv)
         removeModal()
     })
 
@@ -308,7 +401,8 @@ server <- function(input, output, session) {
         print(modal_df)
 
         # update_history_record <- edit_record_modal(history_df, modal_df)  # , modal_df
-        update_history_record <- record_data_modal(action = "update", data_from = "history", modal_df)
+        update_history_record <- record_data_modal(df = history_df(), action = "update", modal_df, # , data_from = "history"
+                                                   columns_values = history_columns_values())
     })
 
     observeEvent(input$update_history, {
@@ -316,12 +410,12 @@ server <- function(input, output, session) {
         print("history record clicked for updating")
 
         showModal(modalDialog("Saving modified record as data frame..", easyClose = TRUE, footer = NULL, fade = TRUE))
-        rctv <- save_record_to_df(history_df, action = "update" , session, modal_df$row_index)
+        rctv <- save_record_to_df(history_df(), action = "update" , session, modal_df$row_index)
         Sys.sleep(3)
         removeModal()
 
         showModal(modalDialog("Saving df into the googlesheet..", footer = NULL, fade = TRUE))
-        save_df_to_gsheet(action = "update", history_file_name, rctv)
+        save_df_to_gsheet(action = "update", input$history_file_url, rctv)
         removeModal()
     })
 
@@ -329,7 +423,8 @@ server <- function(input, output, session) {
     output$selectionText <- renderText(text()) #text_reactive$text)
 
     output$history <- DT::renderDataTable({
-        validate(need(nrow(selected_history_data()) > 0, "Filtered data will show up on selection"))
+        req(history_df())
+        # validate(need(nrow(selected_history_data()) > 0, "Filtered data will show up on selection"))
 
         if(! is.null(selected_history_data())){
             df <- selected_history_data() %>%
@@ -347,6 +442,8 @@ server <- function(input, output, session) {
         )
 
     output$history_timeline <- renderTimevis({
+        req(history_df())
+
         validate(need(nrow(history_timeline_data()) > 0, "Filtered data will show up on selection"))
 
         if(! is.null(history_timeline_data())){
@@ -355,10 +452,13 @@ server <- function(input, output, session) {
         }
             })
 
-    output$map <- renderLeaflet(map())
+    output$map <- renderLeaflet({
+      map()
+    })
 
     output$maintenance_log <- DT::renderDataTable({
-        validate(need(nrow(selected_maintenance_log_data()) > 0, "Filtered data will show up on selection"))
+        req(selected_maintenance_log_data())
+        # validate(need(nrow(selected_maintenance_log_data()) > 0, "Filtered data will show up on selection"))
 
         if(! is.null(selected_maintenance_log_data())){
             df <- selected_maintenance_log_data() %>%

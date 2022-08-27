@@ -1,10 +1,5 @@
 
 
-library(shiny)
-library(googlesheets4)
-library(tidyverse)
-library(janitor)
-
 ## Function to add a record - works for both dashboard/history and maintenance log -
 # It's a generic function that will automatically pull the column names
 # for the data frame passed as argument
@@ -134,16 +129,19 @@ create_modal_inputs <- function(col_nm, col_vals, action, modal_df){
 
 }
 
-record_data_modal <- function(action, data_from, modal_df) {
+record_data_modal <- function(df, action, modal_df, columns_values) {
+
+  df_name <- deparse(substitute(df))
+  data_from <- gsub("_df","",gsub("[()]", "", df_name))
 
   buttonId <- paste(action, data_from, sep="_")
   print(buttonId)
 
-  df <- get(glue::glue("{data_from}_df"))  # column names from raw are not working... TO DO ... :|
+  # df <- get(glue::glue("{data_from}_df"))  # column names from raw are not working... TO DO ... :|
 
   if(data_from == "history")
   {
-    choices_as_list <- history_columns_values %>%
+    choices_as_list <- columns_values %>%
       mutate(column_name = stringr::str_to_lower(column_name)) %>%
       filter(!column_name %in% c("row_index")) %>% # don't show row_index in the pop_up
       group_by(column_name) %>%
@@ -242,9 +240,12 @@ clear_input <- function(session, id, choices) {
 ## Function to filter data based on what selectInput fields are selected.
 # Returns a logical vector (containing true false) depending on if the condition is satisfied or not.
 create_filter_vec <- function(df, var, value) {
+  if(! is.null(df)){
   vec <- df %>% select({{var}})
 
   return(if(value != 'No Selection') (vec == value) else TRUE)
+  } else {return(NULL)}
+
 }
 
 filter_data <- function(df,...){
@@ -253,6 +254,7 @@ filter_data <- function(df,...){
 }
 
 format_date_columns_as_date <- function(df){
+  if(! is.null(df)){
   df %>%
     # Those in datetime format will be converted to Date() format
     mutate(across(where(lubridate::is.POSIXt), as.Date))
@@ -261,17 +263,63 @@ format_date_columns_as_date <- function(df){
 
     # TODO: those that are datetime() but appearing as a list ( combination of datetime and chr)
     # mutate(across(contains("date"), ~ as.Date(.x))) %>%
+
+  } else {return(NULL)}
   }
+
+
 
 get_choices <- function(df, var) {
   # df_name <- deparse(substitute(df))
-  data <- df %>% clean_names()
+
+  if(is.null(df)) {
+    return(NULL)
+  } else
+
+  {
+  data <- df %>%
+    clean_names()
 
   return(switch(var,
          id = c('No Selection',unique(data$id)),
          sensor_location = c('No Selection',unique(data$sensor_location)),
          NULL)
          )
-
+  }
 
 }
+
+load_df <- function(file, sheet){
+
+  df <- read_sheet(ss = file, sheet = sheet, col_types = "c") %>%
+    clean_names() %>%
+    format_date_columns_as_date()
+
+  return(df)
+
+}
+
+prep_data <- function(df){
+  if(grepl("history",deparse(substitute(df)))){
+
+    df <- df %>%
+      filter(!is.na(id))
+
+  } else {
+    df <- df %>%
+      mutate(row_index = as.double(row_index %>% unlist())) %>%
+      # unlisting is needed in the maintenance log file not in history file.
+      identity()
+  }
+
+  return(df)
+}
+# load_meta <- function(file){
+#     history_columns_type <- read_sheet(ss = file, sheet = "column_datatype")
+#
+#     numeric_type_df <- history_columns_type %>%
+#       filter(column_type %in% c('integer','numeric'))
+#
+#     history_columns_values <- read_sheet(ss = file, sheet = "column_values_long")
+#   }
+
